@@ -13,162 +13,116 @@
 \`\`\`
 Candles → Feature Engine → Pattern Detection → Geometry → 
 Confirmation Stack → Projection Engine → Probability → 
-Simulation → Position Management → Outcome → ML Dataset
+Simulation → Position Management → Outcome → ML Dataset v2
 \`\`\`
 
 ## Implemented Phases ✅
 
-### Phase K-W (Previous) ✅
-- ML Dataset Builder, ML Overlay, Multi-Timeframe
-- Production Hardening, Real-Time Streaming
-- Pattern Engine Expansion (99 patterns, 23 detectors)
-- Replay Engine, ML Pipeline
-
-### Phase AE2 - Behaviour Intelligence ✅
-- BehaviourModelBuilder, Bayesian shrinkage
-- Boost calculation with limits
-- Probability pipeline: textbook → confluence → calibration → behaviourBoost → ML overlay → final
-
-### Phase AF - Pattern Discovery Engine ✅
-- Discovery Pipeline: zigzag → embedding → K-Means → validation
-- 5 discovered patterns (DISCOVERY_C1-C5)
-
-### Phase AD - Multi-Timeframe Generalization ✅
-- 8 Supported Timeframes: 1m, 5m, 15m, 1h, 4h, 1d, 1w, 1M
-- Scaling factors per TF
-
-### Phase AE1 - Scenario Behaviour Storage ✅
-- Key: Pattern + Protocol + Context
-- 16 default trading protocols
-
-### Phase AC - Projection Engine ✅
-- Projectors: triangle, flag, HS, harmonic, elliott, channel
-- Confirmation stack with contribution scores
+### Previous Phases ✅
+- Phase K-W: ML Dataset Builder, ML Overlay, Multi-Timeframe, Production Hardening
+- Phase AE2: Behaviour Intelligence
+- Phase AF: Pattern Discovery Engine (5 discovered patterns)
+- Phase AD: Multi-Timeframe (8 TFs)
+- Phase AC: Projection Engine (6 projectors)
 
 ### Phase 3.0 - Execution Simulator v1 ✅ (2026-03-04)
-**Core Components:**
-- **SimRunner**: Steps through candles, gets decisions, creates/fills orders, manages positions
-- **MarketDataProvider**: Deterministic seeded RNG (mulberry32) for reproducible candles
-- **DecisionProvider**: Uses analyzeWithCandles() — NO lookahead bias
-- **Execution Engine**: Order creation, fill logic (MARKET/STOP_MARKET/LIMIT)
-- **Fill Logic**: Slippage, fees, stop/target checks, STOP-first for same-candle exits
+- Deterministic simulation (seeded RNG)
+- No lookahead bias (leakage guard)
+- STOP-first, fees 4bps, slippage by TF
+- Collections: ta_sim_runs, ta_sim_orders, ta_sim_positions
 
-**Key Properties:**
-- Deterministic: Same (symbol, tf, range, seed) → identical results
-- No Lookahead: Leakage guard validates max window ts == nowTs each step
-- Conservative: stopFirst=true, fees 4bps, slippage 3-10bps by TF
+### Phase 3.1 - Dataset Auto Writer ✅ (2026-03-04)
+- Auto-write ML row on position close
+- Supports v1 and v2 schemas
 
-**Collections:**
-- ta_sim_runs, ta_sim_orders, ta_sim_positions, ta_sim_events
+### Phase 5 - Dataset Builder v2 ✅ (2026-03-04)
+**~80 Features organized in 10 groups:**
 
-### Phase 3.1 - Replay→Dataset Auto Writer ✅ (2026-03-04)
-**Новая функциональность:**
-- Автоматическая запись ML row при закрытии позиции
-- Collection: ta_ml_rows_v1
-- Features extraction при position close
-- Label computation: r > 0 → 1 (win), else 0 (loss)
-- Metadata: rMultiple, mfePct, maePct, barsInTrade, exitReason, side
+| Group | Features | Description |
+|-------|----------|-------------|
+| Pattern Geometry | 15 | height, width, slopes, symmetry, compression |
+| Pattern Context | 10 | trend direction/strength, pivot density |
+| Support/Resistance | 10 | distance to S/R, strength, liquidity |
+| Volatility | 8 | ATR, percentile, regime, expansion/compression |
+| Momentum | 8 | RSI, MACD, velocity, divergence |
+| Volume | 6 | mean, spike, trend, divergence |
+| Market Structure | 7 | phase, BOS count, structure strength |
+| Risk | 6 | stop distance, RR, entry quality |
+| Pattern Reliability | 6 | prior winrate, cluster density |
+| Time | 4 | day of week, month, session |
 
 **API Endpoints:**
 \`\`\`
-GET  /api/ta/sim/dataset_hook/config   - Hook configuration
-POST /api/ta/sim/dataset_hook/config   - Update config
-POST /api/ta/sim/dataset_hook/backfill - Backfill from existing positions
+GET  /api/ta/ml/dataset_v2/status        - Status with stats
+GET  /api/ta/ml/dataset_v2/rows          - Get rows with pagination
+GET  /api/ta/ml/dataset_v2/schema        - Feature schema
+GET  /api/ta/ml/dataset_v2/export/csv    - Export to CSV
+GET  /api/ta/ml/dataset_v2/export/jsonl  - Export to JSONL (for Parquet)
+GET  /api/ta/ml/dataset_v2/export/matrix - Export X, y, meta for ML
+GET  /api/ta/ml/dataset_v2/stats/:groupBy - Stats by pattern/side/etc
 \`\`\`
 
-**Hook Config:**
-- enabled: true
-- minRForWrite: -5 (filter massive losses)
-- maxRForWrite: 10 (filter outliers)
-- writeOnTimeout: true
-
-## API Endpoints
-
-### Simulator (Phase 3.0)
-\`\`\`
-GET  /api/ta/sim/stats              - Simulator statistics
-GET  /api/ta/sim/config?tf=1d       - Config per timeframe
-POST /api/ta/sim/run                - Run simulation
-GET  /api/ta/sim/status?runId=X     - Run status
-GET  /api/ta/sim/runs               - Recent runs list
-GET  /api/ta/sim/positions?runId=X  - Positions from run
-GET  /api/ta/sim/orders?runId=X     - Orders from run
-GET  /api/ta/sim/summary?runId=X    - Summary analytics
-\`\`\`
-
-### ML Dataset (Phase 3.1)
-\`\`\`
-GET  /api/ta/ml/dataset/status      - Dataset stats
-GET  /api/ta/ml/dataset/preview?n=10- Preview rows
-GET  /api/ta/ml/dataset/export      - Export CSV
-GET  /api/ta/ml/dataset/schema      - Feature schema
-\`\`\`
+**Labels:**
+- winLoss (1/0)
+- rMultiple
+- mfePct (Max Favorable Excursion)
+- maePct (Max Adverse Excursion)
+- barsInTrade
 
 ## Test Results
-- Phase 3.0: 16/16 tests passed, determinism verified
-- Phase 3.1: Simulation 9 trades → 9 ML rows auto-written
+- Phase 5: 100% (6/6 tests passed)
+- 95+ ML rows in v2 dataset
+- CSV export working
 
 ## Engine Stats
 - **Patterns**: 99 registered
 - **Detectors**: 23 total
-- **Projectors**: 6 (triangle, flag, HS, harmonic, elliott, channel)
-- **ML Features**: 54
+- **Projectors**: 6
+- **ML Features v2**: 80
 
 ## Next Steps (Prioritized Backlog)
 
-### P0 - Current Sprint
-- [x] Phase 3.0 Execution Simulator v1
-- [x] Phase 3.1 Dataset Auto Writer
-
-### P1 - Next Phase
-- [ ] Phase 5 - Dataset Builder v2
-  - Enhanced features (market structure, pattern geometry)
-  - Export Parquet/CSV with rich metadata
-
-### P1 - Training Pipeline
-- [ ] Phase 6 - Training + Registry + Rollout
+### P0 - Next Phase
+- [ ] **Phase 6 — ML Training + Registry + Rollout**
   - Training job (Python: LightGBM/CatBoost)
-  - Model registry with quality gates (AUC, ECE)
-  - Safe rollout: SHADOW → LIVE
+  - Model registry with quality gates (AUC, ECE, maxDelta)
+  - Rollout states: SHADOW → LIVE_LITE → LIVE_MED → LIVE_FULL
+  - Backtest comparison against baseline
+
+### P1 - Enhancements
+- [ ] Pattern Geometry Engine (передача геометрии в features)
+- [ ] Full context passing from simulation to extractor
 
 ### P2 - Advanced
 - [ ] Phase AG - Market Structure Graph
-  - Pattern relationships graph
-  - State transition analysis
-
 - [ ] Phase AH - Dynamic Pattern Integration
-  - Auto-integrate discovered patterns
-
 - [ ] Phase AI - Adaptive Learning
-  - Self-learning loop: error → understand → retrain
 
 ## Key Files
 \`\`\`
 /app/backend/src/modules/ta/
 ├── simulator/
-│   ├── domain.ts          # Types (SimOrder, SimPosition, etc)
-│   ├── config.ts          # Simulator config per TF
-│   ├── fill.ts            # Fill logic, slippage, MFE/MAE
-│   ├── execution.ts       # Order creation, position lifecycle
-│   ├── storage.ts         # MongoDB operations
-│   ├── runner.ts          # Main simulation loop
-│   └── dataset_hook.ts    # Phase 3.1: Auto ML row writer
+│   ├── runner.ts          # Simulation loop
+│   └── dataset_hook.ts    # Auto ML row writer
 ├── ml/
-│   ├── feature_schema.ts  # ML feature definitions
-│   ├── feature_extractor.ts
-│   ├── dataset_writer.ts  # Write to ta_ml_rows_v1
-│   └── model_registry.ts
-├── runtime/
-│   └── ta.controller.ts   # API endpoints
-└── ...
+│   ├── feature_schema_v2.ts    # 80 feature definitions
+│   ├── feature_extractor_v2.ts # Feature extraction
+│   └── dataset_writer_v2.ts    # MongoDB + CSV/JSONL export
+└── runtime/
+    └── ta.controller.ts    # API endpoints
 \`\`\`
 
-## Modularity
-TA Engine готов к извлечению как отдельный пакет:
-- Зависит только от interfaces (MarketDataProvider, StorageProvider)
-- Не знает о auth, users, frontend, telegram
-- modules/ta/ можно скопировать в любой проект
+## Ready for ML Training
+System now generates:
+\`\`\`
+symbol + timeframe + 80 features + labels (R, MFE, MAE, bars)
+\`\`\`
+
+Export to CSV/JSONL for Python ML training:
+\`\`\`bash
+curl http://localhost:8002/api/ta/ml/dataset_v2/export/csv > dataset.csv
+\`\`\`
 
 ---
 Updated: 2026-03-04
-Version: 3.1.0
+Version: 5.0.0
