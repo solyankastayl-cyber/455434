@@ -3739,7 +3739,182 @@ export async function taRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  console.log('[TA] Phase 3.0 (Execution Simulator), Phase 3.1 (Dataset Hook), and Phase 5 (Dataset v2) endpoints added');
+  // ═══════════════════════════════════════════════════════════════
+  // PHASE 6: ML Training Pipeline Endpoints (v2)
+  // ═══════════════════════════════════════════════════════════════
+
+  // ML Registry v2: List models with active status
+  app.get('/ml/registry/models', async () => {
+    const { listModels, getActiveModel } = await import('../ml/training/registry.service.js');
+    
+    const models = await listModels();
+    const active = await getActiveModel();
+    
+    return {
+      ok: true,
+      phase: '6',
+      description: 'ML Training Pipeline - Model Registry',
+      activeModelId: active?.modelId || null,
+      models: models.map(m => ({
+        modelId: m.modelId,
+        stage: m.stage,
+        enabled: m.enabled,
+        task: m.task,
+        metrics: m.metrics,
+        createdAt: m.createdAt,
+      })),
+    };
+  });
+
+  // ML Registry v2: Get model details
+  app.get('/ml/registry/models/:modelId', async (request: FastifyRequest<{
+    Params: { modelId: string }
+  }>) => {
+    const { getModel } = await import('../ml/training/registry.service.js');
+    
+    const model = await getModel(request.params.modelId);
+    if (!model) {
+      return { ok: false, error: 'Model not found' };
+    }
+    
+    return { ok: true, model };
+  });
+
+  // ML Registry v2: Register model from artifact
+  app.post('/ml/registry/register', async (request: FastifyRequest<{
+    Body: { artifactPath: string; modelId?: string }
+  }>) => {
+    const { registerModel } = await import('../ml/training/registry.service.js');
+    
+    try {
+      const model = await registerModel(
+        request.body.artifactPath,
+        request.body.modelId
+      );
+      return { ok: true, model };
+    } catch (e) {
+      return { ok: false, error: (e as Error).message };
+    }
+  });
+
+  // ML Registry v2: Train new model
+  app.post('/ml/registry/train', async (request: FastifyRequest<{
+    Body?: { modelId?: string }
+  }>) => {
+    const { trainModel } = await import('../ml/training/registry.service.js');
+    
+    const result = await trainModel({
+      modelId: request.body?.modelId,
+    });
+    
+    return {
+      ok: result.ok,
+      phase: '6',
+      ...result,
+    };
+  });
+
+  // ML Registry v2: Set model stage
+  app.post('/ml/registry/models/:modelId/stage', async (request: FastifyRequest<{
+    Params: { modelId: string };
+    Body: { stage: string; force?: boolean }
+  }>) => {
+    const { setStage } = await import('../ml/training/registry.service.js');
+    
+    const result = await setStage(
+      request.params.modelId,
+      request.body.stage as any,
+      request.body.force ?? false
+    );
+    
+    return result;
+  });
+
+  // ML Registry v2: Enable model
+  app.post('/ml/registry/models/:modelId/enable', async (request: FastifyRequest<{
+    Params: { modelId: string };
+    Body?: { force?: boolean }
+  }>) => {
+    const { enableModel } = await import('../ml/training/registry.service.js');
+    
+    return await enableModel(
+      request.params.modelId,
+      request.body?.force ?? false
+    );
+  });
+
+  // ML Registry v2: Disable model
+  app.post('/ml/registry/models/:modelId/disable', async (request: FastifyRequest<{
+    Params: { modelId: string }
+  }>) => {
+    const { disableModel } = await import('../ml/training/registry.service.js');
+    
+    await disableModel(request.params.modelId);
+    return { ok: true };
+  });
+
+  // ML Rollout: Check if model can be enabled
+  app.get('/ml/rollout/check/:modelId', async (request: FastifyRequest<{
+    Params: { modelId: string };
+    Querystring: { targetStage?: string }
+  }>) => {
+    const { checkRollout, getModel } = await import('../ml/training/registry.service.js');
+    
+    const model = await getModel(request.params.modelId);
+    const targetStage = (request.query.targetStage || model?.stage || 'SHADOW') as any;
+    
+    return await checkRollout(request.params.modelId, targetStage);
+  });
+
+  // ML Overlay v2: Status
+  app.get('/ml/overlay_v2/status', async () => {
+    const { getOverlayStatus } = await import('../ml/training/overlay.service.js');
+    
+    return {
+      ok: true,
+      phase: '6',
+      ...(await getOverlayStatus()),
+    };
+  });
+
+  // ML Overlay v2: Predict
+  app.post('/ml/overlay_v2/predict', async (request: FastifyRequest<{
+    Body: {
+      symbol: string;
+      tf: string;
+      baseProbability: number;
+      features: Record<string, number>;
+    }
+  }>) => {
+    const { applyOverlay } = await import('../ml/training/overlay.service.js');
+    
+    return await applyOverlay({
+      symbol: request.body.symbol,
+      tf: request.body.tf,
+      ts: Date.now(),
+      baseProbability: request.body.baseProbability,
+      features: request.body.features,
+    });
+  });
+
+  // ML Overlay v2: Config
+  app.get('/ml/overlay_v2/config', async () => {
+    const { getOverlayConfig } = await import('../ml/training/overlay.service.js');
+    return { ok: true, config: getOverlayConfig() };
+  });
+
+  app.patch('/ml/overlay_v2/config', async (request: FastifyRequest<{
+    Body: { enabled?: boolean }
+  }>) => {
+    const { setOverlayConfig, getOverlayConfig } = await import('../ml/training/overlay.service.js');
+    setOverlayConfig(request.body);
+    return { ok: true, config: getOverlayConfig() };
+  });
+
+  // Initialize ML storage indexes
+  import('../ml/training/storage.js').then(s => s.ensureIndexes()).catch(() => {});
+
+  console.log('[TA] Phase 3.0 (Execution Simulator), Phase 3.1 (Dataset Hook), Phase 5 (Dataset v2), and Phase 6 (ML Training) endpoints added');
 }
 
 // Helper for factor descriptions

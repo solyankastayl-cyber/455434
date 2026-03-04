@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Backend Test Suite - TA Engine Dataset v2
-Tests the TypeScript backend endpoints for ML dataset functionality
+Backend Test Suite - Phase 6: ML Training Pipeline
+Tests the TypeScript backend endpoints for ML training, model registry, quality gates, and SHADOW→LIVE rollout
 """
 
 import requests
@@ -9,7 +9,7 @@ import sys
 import json
 from datetime import datetime
 
-class TAEngineDatasetV2Tester:
+class TAEngineMLTrainingTester:
     def __init__(self, base_url="http://localhost:8002"):
         self.base_url = base_url
         self.tests_run = 0
@@ -69,40 +69,40 @@ class TAEngineDatasetV2Tester:
             return False, {}
 
     def test_health(self):
-        """Test server health"""
+        """Test server health - GET /api/ta/health"""
         return self.run_test("Health Check", "GET", "api/ta/health")
 
-    def test_dataset_v2_status(self):
-        """Test dataset v2 status endpoint"""
-        return self.run_test("Dataset v2 Status", "GET", "api/ta/ml/dataset_v2/status")
+    def test_ml_registry_models(self):
+        """Test model registry list - GET /api/ta/ml/registry/models"""
+        return self.run_test("ML Registry - List Models", "GET", "api/ta/ml/registry/models")
 
-    def test_dataset_v2_schema(self):
-        """Test dataset v2 schema endpoint"""
-        return self.run_test("Dataset v2 Schema", "GET", "api/ta/ml/dataset_v2/schema")
+    def test_rollout_check(self):
+        """Test quality gates rollout check - GET /api/ta/ml/rollout/check/model_001?targetStage=LIVE_LITE"""
+        return self.run_test("ML Quality Gates - Rollout Check", "GET", "api/ta/ml/rollout/check/model_001?targetStage=LIVE_LITE")
 
-    def test_dataset_v2_rows(self):
-        """Test dataset v2 rows endpoint"""
-        return self.run_test("Dataset v2 Rows (limit=2)", "GET", "api/ta/ml/dataset_v2/rows?limit=2")
+    def test_overlay_status(self):
+        """Test ML overlay status - GET /api/ta/ml/overlay_v2/status"""
+        return self.run_test("ML Overlay - Status", "GET", "api/ta/ml/overlay_v2/status")
 
-    def test_dataset_v2_export_csv(self):
-        """Test dataset v2 CSV export"""
-        return self.run_test("Dataset v2 CSV Export (limit=3)", "GET", "api/ta/ml/dataset_v2/export/csv?limit=3")
-
-    def test_sim_run(self):
-        """Test simulation run to generate v2 data"""
+    def test_ml_predict(self):
+        """Test ML prediction - POST /api/ta/ml/overlay_v2/predict"""
         data = {
-            "symbol": "BTCUSDT",
-            "tf": "1D",
-            "fromTs": int(datetime.now().timestamp()) - 86400 * 30,  # 30 days ago
-            "toTs": int(datetime.now().timestamp()),
-            "warmupBars": 50,
-            "seed": 1337
+            "features": {
+                "pattern_height_pct": 4.2,
+                "volatility_recent": 0.8,
+                "rsi_14": 65.0,
+                "volume_ratio": 1.5,
+                "trend_strength": 0.7
+            },
+            "baseProbability": 0.55,
+            "symbol": "BTCUSDT", 
+            "tf": "1H"
         }
-        return self.run_test("Run Simulation (to generate v2 data)", "POST", "api/ta/sim/run", 200, data)
+        return self.run_test("ML Overlay - Predict", "POST", "api/ta/ml/overlay_v2/predict", 200, data)
 
     def run_all_tests(self):
-        """Run all dataset v2 tests"""
-        print("🚀 Starting TA Engine Dataset v2 Tests")
+        """Run all ML Training Pipeline tests"""
+        print("🚀 Starting Phase 6: ML Training Pipeline Tests")
         print(f"📍 Testing server: {self.base_url}")
         print("=" * 60)
 
@@ -112,58 +112,94 @@ class TAEngineDatasetV2Tester:
             print("❌ Server not responding. Stopping tests.")
             return False
 
-        # Test 2: Dataset v2 status - should show 30 rows, 80 features
-        success, data = self.test_dataset_v2_status()
+        # Test 2: ML Registry - should contain model_001
+        print("\n📊 Testing ML Model Registry...")
+        success, data = self.test_ml_registry_models()
         if success and data:
-            # Check if we have the expected features
-            if data.get('featureCount') == 80:
-                print(f"   ✓ Confirmed 80 features")
-            else:
-                print(f"   ⚠️  Expected 80 features, got {data.get('featureCount')}")
+            models = data.get('models', [])
+            active_model = data.get('activeModel')
             
-            if data.get('totalRows', 0) >= 30:
-                print(f"   ✓ Has {data.get('totalRows')} rows (≥30 expected)")
+            if models:
+                print(f"   ✓ Found {len(models)} registered models")
+                model_001_found = any(m.get('modelId') == 'model_001' for m in models)
+                if model_001_found:
+                    print(f"   ✓ model_001 found in registry")
+                else:
+                    print(f"   ⚠️  model_001 not found in registry")
+                
+                # Check for SHADOW stage model
+                shadow_models = [m for m in models if m.get('stage') == 'SHADOW']
+                if shadow_models:
+                    print(f"   ✓ Found {len(shadow_models)} models in SHADOW stage")
             else:
-                print(f"   ⚠️  Expected ≥30 rows, got {data.get('totalRows')}")
+                print(f"   ⚠️  No models found in registry")
 
-        # Test 3: Schema info
-        success, data = self.test_dataset_v2_schema()
-        if success and data:
-            features = data.get('features', [])
-            if len(features) == 80:
-                print(f"   ✓ Schema contains 80 features")
-                # Print first few feature groups for verification
-                pattern_geom = [f for f in features if 'pattern_' in f and ('type' in f or 'height' in f or 'width' in f)][:3]
-                if pattern_geom:
-                    print(f"   ✓ Pattern geometry features: {', '.join(pattern_geom)}")
-
-        # Test 4: Get rows
-        success, data = self.test_dataset_v2_rows()
-        if success and data:
-            rows = data.get('rows', [])
-            if rows:
-                print(f"   ✓ Retrieved {len(rows)} sample rows")
-                # Check if rows have expected structure
-                first_row = rows[0] if rows else {}
-                if 'features' in first_row and 'labels' in first_row:
-                    print(f"   ✓ Rows have correct structure (features + labels)")
-
-        # Test 5: CSV export
-        success, data = self.test_dataset_v2_export_csv()
-        if success:
-            print(f"   ✓ CSV export working")
-
-        # Test 6: Run simulation to generate new v2 data
-        print("\n📊 Testing simulation run to verify v2 dataset writing...")
-        success, data = self.test_sim_run()
-        if success and data:
-            if data.get('ok'):
-                print(f"   ✓ Simulation completed: {data.get('runId')}")
-                summary = data.get('summary')
-                if summary:
-                    print(f"   ✓ Trades: {summary.get('totalTrades')}, Win Rate: {summary.get('winRate')}")
+            if active_model:
+                print(f"   ✓ Active model: {active_model.get('modelId')} ({active_model.get('stage')})")
             else:
-                print(f"   ⚠️  Simulation may have issues: {data}")
+                print(f"   ⚠️  No active model found")
+
+        # Test 3: Quality Gates - rollout check
+        print("\n🚥 Testing Quality Gates & Rollout Check...")
+        success, data = self.test_rollout_check()
+        if success and data:
+            can_enable = data.get('canEnable', False)
+            target_stage = data.get('targetStage')
+            reasons = data.get('reasons', [])
+            metrics = data.get('metrics', {})
+            
+            print(f"   ✓ Quality gate check completed for {target_stage}")
+            if can_enable:
+                print(f"   ✅ Model can be promoted to {target_stage}")
+            else:
+                print(f"   ⚠️  Model blocked from {target_stage}: {', '.join(reasons)}")
+            
+            if metrics:
+                auc = metrics.get('auc')
+                ece = metrics.get('ece')
+                rows = metrics.get('rows')
+                auc_str = f"{auc:.3f}" if auc is not None else 'N/A'
+                ece_str = f"{ece:.3f}" if ece is not None else 'N/A'
+                print(f"   📊 Metrics: AUC={auc_str}, ECE={ece_str}, Rows={rows}")
+
+        # Test 4: ML Overlay Status
+        print("\n🔄 Testing ML Overlay Status...")
+        success, data = self.test_overlay_status()
+        if success and data:
+            enabled = data.get('enabled', False)
+            active_model = data.get('activeModel')
+            config = data.get('config', {})
+            
+            print(f"   ✓ Overlay enabled: {enabled}")
+            if active_model:
+                print(f"   ✓ Active overlay model: {active_model.get('modelId')} ({active_model.get('stage')})")
+            
+            alpha_stages = config.get('alphaByStage', {})
+            if alpha_stages:
+                print(f"   ✓ Alpha config: SHADOW={alpha_stages.get('SHADOW', 0)}, LIVE_LITE={alpha_stages.get('LIVE_LITE', 0)}")
+
+        # Test 5: ML Prediction
+        print("\n🧠 Testing ML Prediction...")
+        success, data = self.test_ml_predict()
+        if success and data:
+            ok = data.get('ok', False)
+            probability_source = data.get('probabilitySource', 'UNKNOWN')
+            final_probability = data.get('finalProbability')
+            ml_probability = data.get('mlProbability')
+            delta = data.get('delta')
+            stage = data.get('stage')
+            gates_applied = data.get('gatesApplied', [])
+            
+            print(f"   ✓ Prediction successful: {ok}")
+            print(f"   📈 Source: {probability_source}, Stage: {stage}")
+            if final_probability is not None:
+                print(f"   📊 Final probability: {final_probability:.3f}")
+            if ml_probability is not None:
+                print(f"   🤖 ML probability: {ml_probability:.3f}")
+            if delta is not None:
+                print(f"   🔄 Delta: {delta:.3f}")
+            if gates_applied:
+                print(f"   🚥 Gates applied: {', '.join(gates_applied)}")
 
         return True
 
@@ -173,12 +209,12 @@ class TAEngineDatasetV2Tester:
         print(f"📊 Test Results: {self.tests_passed}/{self.tests_run} passed")
         
         if self.tests_passed == self.tests_run:
-            print("🎉 All tests passed! Dataset v2 is working correctly.")
+            print("🎉 All tests passed! Phase 6 ML Training Pipeline is working correctly.")
         else:
             print(f"⚠️  {self.tests_run - self.tests_passed} tests failed.")
         
-        print(f"🔍 Dataset v2 Features: ~80 ML features organized in 10 groups")
-        print(f"🧪 Mock market data: Uses seeded RNG for reproducible testing")
+        print(f"🔧 ML Training Pipeline: LightGBM, Model Registry, Quality Gates")
+        print(f"🚀 SHADOW→LIVE rollout with configurable alpha blending")
         
         # Show failed tests
         failed_tests = [r for r in self.results if not r['success']]
@@ -189,11 +225,11 @@ class TAEngineDatasetV2Tester:
 
 def main():
     """Main test runner"""
-    print("TA Engine Dataset Builder v2 - Phase 5 Testing")
-    print("Testing ~80 features for ML training")
+    print("TA Engine Phase 6: ML Training Pipeline Testing")
+    print("Testing LightGBM, Model Registry, Quality Gates, SHADOW→LIVE rollout")
     print()
 
-    tester = TAEngineDatasetV2Tester()
+    tester = TAEngineMLTrainingTester()
     
     # Run all tests
     success = tester.run_all_tests()

@@ -1,0 +1,26 @@
+{
+  "model_id": "model_001",
+  "created_at": "2026-03-04T22:47:45.041389",
+  "rows": 405,
+  "features_version": "v2",
+  "features_count": 80,
+  "task": "WIN_PROB",
+  "r_threshold": 0.5,
+  "artifact": {
+    "kind": "LOCAL_FILE",
+    "path": "/app/ml_artifacts/model_001/model.joblib",
+    "checksum_sha256": "c3771a908081ac8b88bc3016c00cb493b46c23ef180b897fe1fa9895c9a502a9"
+  },
+  "metrics": {
+    "auc": 0.5,
+    "logloss": 0.6125660062005608,
+    "brier": 0.21064814814814814,
+    "ece": 0.046296296296296335
+  },
+  "gates": {
+    "min_rows_to_enable": 5000,
+    "min_auc_to_enable": 0.56,
+    "max_ece_to_enable": 0.08,
+    "max_delta_prob": 0.15
+  }
+}
