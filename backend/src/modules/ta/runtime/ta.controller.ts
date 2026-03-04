@@ -3567,7 +3567,179 @@ export async function taRoutes(app: FastifyInstance): Promise<void> {
     };
   });
 
-  console.log('[TA] Phase 3.0 (Execution Simulator) and Phase 3.1 (Dataset Hook) endpoints added');
+  // ═══════════════════════════════════════════════════════════════
+  // PHASE 5: Dataset Builder v2 Endpoints
+  // ═══════════════════════════════════════════════════════════════
+
+  // Dataset v2 status
+  app.get('/ml/dataset_v2/status', async () => {
+    const { getDatasetStatsV2 } = await import('../ml/dataset_writer_v2.js');
+    const { getFeatureNamesV2, getFeatureCountV2 } = await import('../ml/feature_schema_v2.js');
+    
+    const stats = await getDatasetStatsV2();
+    
+    return {
+      ok: true,
+      phase: '5',
+      description: 'Dataset Builder v2 - ~80 features for ML training',
+      ...stats,
+      featureGroups: {
+        'pattern_geometry': 15,
+        'pattern_context': 10,
+        'support_resistance': 10,
+        'volatility': 8,
+        'momentum': 8,
+        'volume': 6,
+        'market_structure': 7,
+        'risk': 6,
+        'pattern_reliability': 6,
+        'time': 4,
+      },
+    };
+  });
+
+  // Get dataset rows v2
+  app.get('/ml/dataset_v2/rows', async (request: FastifyRequest<{
+    Querystring: { 
+      limit?: string; 
+      skip?: string; 
+      symbol?: string; 
+      timeframe?: string;
+      runId?: string;
+    }
+  }>) => {
+    const { getDatasetRowsV2 } = await import('../ml/dataset_writer_v2.js');
+    
+    const rows = await getDatasetRowsV2({
+      limit: parseInt(request.query.limit ?? '20'),
+      skip: parseInt(request.query.skip ?? '0'),
+      symbol: request.query.symbol,
+      timeframe: request.query.timeframe,
+      runId: request.query.runId,
+    });
+    
+    return {
+      ok: true,
+      phase: '5',
+      count: rows.length,
+      rows,
+    };
+  });
+
+  // Export to CSV
+  app.get('/ml/dataset_v2/export/csv', async (request: FastifyRequest<{
+    Querystring: { 
+      symbol?: string; 
+      timeframe?: string;
+      runId?: string;
+      limit?: string;
+    }
+  }>, reply: FastifyReply) => {
+    const { exportToCSV } = await import('../ml/dataset_writer_v2.js');
+    
+    const csv = await exportToCSV({
+      symbol: request.query.symbol,
+      timeframe: request.query.timeframe,
+      runId: request.query.runId,
+      limit: parseInt(request.query.limit ?? '100000'),
+    });
+    
+    reply.header('Content-Type', 'text/csv');
+    reply.header('Content-Disposition', 'attachment; filename="dataset_v2.csv"');
+    return csv;
+  });
+
+  // Export to JSONL (for Parquet conversion)
+  app.get('/ml/dataset_v2/export/jsonl', async (request: FastifyRequest<{
+    Querystring: { 
+      symbol?: string; 
+      timeframe?: string;
+      runId?: string;
+      limit?: string;
+    }
+  }>, reply: FastifyReply) => {
+    const { exportToJSONL } = await import('../ml/dataset_writer_v2.js');
+    
+    const jsonl = await exportToJSONL({
+      symbol: request.query.symbol,
+      timeframe: request.query.timeframe,
+      runId: request.query.runId,
+      limit: parseInt(request.query.limit ?? '100000'),
+    });
+    
+    reply.header('Content-Type', 'application/x-ndjson');
+    reply.header('Content-Disposition', 'attachment; filename="dataset_v2.jsonl"');
+    return jsonl;
+  });
+
+  // Export feature matrix (X, y, meta)
+  app.get('/ml/dataset_v2/export/matrix', async (request: FastifyRequest<{
+    Querystring: { 
+      symbol?: string; 
+      timeframe?: string;
+      runId?: string;
+      limit?: string;
+    }
+  }>) => {
+    const { exportFeatureMatrix } = await import('../ml/dataset_writer_v2.js');
+    const { getFeatureNamesV2 } = await import('../ml/feature_schema_v2.js');
+    
+    const { X, y, meta } = await exportFeatureMatrix({
+      symbol: request.query.symbol,
+      timeframe: request.query.timeframe,
+      runId: request.query.runId,
+      limit: parseInt(request.query.limit ?? '10000'),
+    });
+    
+    return {
+      ok: true,
+      phase: '5',
+      shape: [X.length, X[0]?.length ?? 0],
+      featureNames: getFeatureNamesV2(),
+      X,
+      y,
+      meta,
+    };
+  });
+
+  // Stats by group (pattern type, side, etc.)
+  app.get('/ml/dataset_v2/stats/:groupBy', async (request: FastifyRequest<{
+    Params: { groupBy: string }
+  }>) => {
+    const { getStatsByGroup } = await import('../ml/dataset_writer_v2.js');
+    
+    const stats = await getStatsByGroup(request.params.groupBy);
+    
+    return {
+      ok: true,
+      phase: '5',
+      groupBy: request.params.groupBy,
+      groups: stats,
+    };
+  });
+
+  // Feature schema info
+  app.get('/ml/dataset_v2/schema', async () => {
+    const { 
+      getFeatureNamesV2, 
+      getFeatureCountV2,
+      PATTERN_TYPE_ENCODING,
+      PATTERN_FAMILY_ENCODING,
+    } = await import('../ml/feature_schema_v2.js');
+    
+    return {
+      ok: true,
+      phase: '5',
+      featureCount: getFeatureCountV2(),
+      features: getFeatureNamesV2(),
+      encodings: {
+        patternTypes: PATTERN_TYPE_ENCODING,
+        patternFamilies: PATTERN_FAMILY_ENCODING,
+      },
+    };
+  });
+
+  console.log('[TA] Phase 3.0 (Execution Simulator), Phase 3.1 (Dataset Hook), and Phase 5 (Dataset v2) endpoints added');
 }
 
 // Helper for factor descriptions
