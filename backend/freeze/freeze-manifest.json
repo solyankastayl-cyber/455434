@@ -1,0 +1,118 @@
+{
+  "version": "v2.0-fractal-stable",
+  "freezeDate": "2026-03-03",
+  "gitCommitSha": "af5274e41ea9847bf81cf3acc05bc2e4667260d3",
+  "tag": "v2.0-fractal-stable",
+  "buildTimestamp": "2026-03-03T15:17:31Z",
+  
+  "horizonPolicy": {
+    "BTC": {
+      "horizons": ["7d", "14d", "30d", "90d"],
+      "windowLenStrategy": "adaptive",
+      "minSamples": 30,
+      "defaultHorizon": "14d"
+    },
+    "SPX": {
+      "horizons": ["5d", "10d", "21d", "63d"],
+      "windowLenStrategy": "fixed",
+      "minSamples": 30,
+      "defaultHorizon": "21d"
+    },
+    "DXY": {
+      "horizons": ["5d", "10d", "21d"],
+      "windowLenStrategy": "fixed",
+      "minSamples": 30,
+      "defaultHorizon": "10d"
+    },
+    "CROSS_ASSET": {
+      "horizons": ["7d", "14d", "30d"],
+      "inheritFrom": ["BTC", "SPX", "DXY"],
+      "aggregation": "weighted_average"
+    }
+  },
+  
+  "windowLenStrategy": {
+    "BTC": { "type": "adaptive", "min": 50, "max": 200, "default": 100 },
+    "SPX": { "type": "fixed", "value": 100 },
+    "DXY": { "type": "fixed", "value": 100 },
+    "CROSS_ASSET": { "type": "inherited" }
+  },
+  
+  "healthThresholds": {
+    "grades": {
+      "HEALTHY": { "hitRateMin": 0.50, "maxAvgAbsError": 5.0 },
+      "DEGRADED": { "hitRateMin": 0.45, "maxAvgAbsError": 7.0 },
+      "CRITICAL": { "hitRateMin": 0.0, "maxAvgAbsError": 999 }
+    },
+    "minSamplesForGrade": 10,
+    "staleAfterHours": 168
+  },
+  
+  "driftThresholds": {
+    "severity": {
+      "OK": { "maxDelta": 0.02 },
+      "WATCH": { "maxDelta": 0.05 },
+      "WARN": { "maxDelta": 0.10 },
+      "CRITICAL": { "maxDelta": 0.15 }
+    },
+    "windowSizes": {
+      "rolling": 30,
+      "byHorizon": "auto"
+    }
+  },
+  
+  "confidenceModifiers": {
+    "sampleCountBonus": { "threshold": 30, "bonus": 0.10 },
+    "regimeMatchBonus": { "enabled": true, "value": 0.05 },
+    "driftPenalty": { "WARN": -0.10, "CRITICAL": -0.20 },
+    "volatilityAdjust": { "enabled": true, "factor": 0.8 }
+  },
+  
+  "compositeRules": {
+    "weightBounds": { "min": 0.10, "max": 0.60 },
+    "clampStrategy": "soft_sigmoid",
+    "fallbackToParent": true,
+    "defaultWeights": {
+      "BTC": 0.50,
+      "SPX": 0.30,
+      "DXY": 0.20
+    }
+  },
+  
+  "allowedJobs": [
+    "full",
+    "resolve_matured",
+    "health",
+    "health_check"
+  ],
+  
+  "blockedPatterns": [
+    "POST /api/*/lifecycle/promote",
+    "POST /api/*/lifecycle/rollback",
+    "PATCH /api/*/model-config",
+    "POST /api/*/model-config",
+    "POST /api/admin/jobs/run?job=seed*",
+    "POST /api/admin/jobs/run?job=backfill",
+    "POST /api/admin/jobs/run?job=reset",
+    "POST /api/*/lifecycle/drift",
+    "POST /api/*/lifecycle/samples",
+    "POST /api/*/lifecycle/constitution",
+    "POST /api/*/lifecycle/integrity"
+  ],
+  
+  "auditInfo": {
+    "frozenBy": "system",
+    "reason": "Production lockdown - final release",
+    "freezeAuditPassed": true,
+    "testsPassed": 14,
+    "testsFailed": 0,
+    "lastAuditDate": "2026-03-03T15:17:31Z"
+  },
+  
+  "runtimeInvariants": {
+    "noPromoteInFull": true,
+    "noConfigMutationInFull": true,
+    "resolveIdempotent": true,
+    "healthReadOnly": true
+  }
+}

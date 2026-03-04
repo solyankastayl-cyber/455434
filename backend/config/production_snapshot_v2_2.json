@@ -1,0 +1,60 @@
+{
+  "version": "2.2.0-production-baseline",
+  "createdAt": "2026-02-28T14:50:00.000Z",
+  "frozen": true,
+  "description": "Production snapshot v2.2 - Core system frozen, Capital Scaling v2.3 added as shadow",
+  
+  "scenarioPriors": {
+    "BASE": 0.65,
+    "RISK": 0.25,
+    "TAIL": 0.10
+  },
+  
+  "metaRiskCaps": {
+    "globalScaleMin": 0.50,
+    "globalScaleMax": 1.30,
+    "guardCaps": {
+      "BLOCK": 0.10,
+      "CRISIS": 0.25
+    }
+  },
+  
+  "optimizerDeltaLimits": {
+    "BASE": 0.10,
+    "RISK": 0.12,
+    "TAIL": 0.15
+  },
+  
+  "tailEligibility": {
+    "minTailRisk": 0.03,
+    "maxTailRisk": 0.10,
+    "tailPenaltyMax": 0.25
+  },
+  
+  "quantileModelId": "v2.2-quantile-spx",
+  
+  "crossAssetThresholds": {
+    "correlationHigh": 0.70,
+    "correlationLow": 0.30,
+    "volatilityNormal": 0.15,
+    "volatilityElevated": 0.25
+  },
+  
+  "capitalScaling": {
+    "version": "2.3.0-shadow",
+    "baseRiskBudget": 0.65,
+    "targetVol": 0.12,
+    "volClamp": [0.80, 1.20],
+    "minRiskBudget": 0.10,
+    "maxRiskBudget": 0.80
+  },
+  
+  "notes": [
+    "Brain module: frozen",
+    "Optimizer: frozen",
+    "MetaRisk: frozen",
+    "Quantile: frozen",
+    "CrossAsset: frozen",
+    "Capital Scaling: shadow mode (v2.3)"
+  ]
+}
