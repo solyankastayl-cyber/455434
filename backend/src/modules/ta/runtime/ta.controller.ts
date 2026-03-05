@@ -3911,10 +3911,158 @@ export async function taRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true, config: getOverlayConfig() };
   });
 
-  // Initialize ML storage indexes
-  import('../ml/training/storage.js').then(s => s.ensureIndexes()).catch(() => {});
+  // ═══════════════════════════════════════════════════════════════
+  // PHASE 7: Batch Simulation Endpoints
+  // ═══════════════════════════════════════════════════════════════
 
-  console.log('[TA] Phase 3.0 (Execution Simulator), Phase 3.1 (Dataset Hook), Phase 5 (Dataset v2), and Phase 6 (ML Training) endpoints added');
+  // Create batch run
+  app.post('/batch/create', async (request: FastifyRequest<{
+    Body: {
+      name?: string;
+      symbols: string[];
+      tfs: string[];
+      startTs: number;
+      endTs: number;
+      config?: any;
+    }
+  }>) => {
+    const { createBatchRun } = await import('../batch/service.js');
+    
+    const run = await createBatchRun(request.body);
+    
+    return {
+      ok: true,
+      phase: '7',
+      runId: run.runId,
+      name: run.name,
+      tasks: run.progress.totalTasks,
+      symbols: run.symbols,
+      tfs: run.tfs,
+    };
+  });
+
+  // Start batch run
+  app.post('/batch/start', async (request: FastifyRequest<{
+    Querystring: { runId: string }
+  }>) => {
+    const { startBatchRun } = await import('../batch/service.js');
+    return await startBatchRun(request.query.runId);
+  });
+
+  // Cancel batch run
+  app.post('/batch/cancel', async (request: FastifyRequest<{
+    Querystring: { runId: string }
+  }>) => {
+    const { cancelBatchRun } = await import('../batch/service.js');
+    return await cancelBatchRun(request.query.runId);
+  });
+
+  // Get batch run status
+  app.get('/batch/status', async (request: FastifyRequest<{
+    Querystring: { runId: string }
+  }>) => {
+    const { getBatchRunStatus } = await import('../batch/service.js');
+    
+    const run = await getBatchRunStatus(request.query.runId);
+    if (!run) {
+      return { ok: false, error: 'Run not found' };
+    }
+    
+    return {
+      ok: true,
+      phase: '7',
+      ...run,
+    };
+  });
+
+  // List batch runs
+  app.get('/batch/runs', async (request: FastifyRequest<{
+    Querystring: { limit?: string }
+  }>) => {
+    const { listBatchRuns } = await import('../batch/service.js');
+    
+    const runs = await listBatchRuns(parseInt(request.query.limit ?? '20'));
+    
+    return {
+      ok: true,
+      phase: '7',
+      runs,
+    };
+  });
+
+  // Get tasks for run
+  app.get('/batch/tasks', async (request: FastifyRequest<{
+    Querystring: { runId: string; status?: string }
+  }>) => {
+    const { getRunTasks } = await import('../batch/service.js');
+    
+    const tasks = await getRunTasks(request.query.runId, request.query.status);
+    
+    return {
+      ok: true,
+      count: tasks.length,
+      tasks: tasks.slice(0, 50), // Limit response
+    };
+  });
+
+  // Requeue failed tasks
+  app.post('/batch/requeue_failed', async (request: FastifyRequest<{
+    Querystring: { runId: string }
+  }>) => {
+    const { requeueFailedTasks } = await import('../batch/service.js');
+    
+    const count = await requeueFailedTasks(request.query.runId);
+    
+    return { ok: true, requeuedCount: count };
+  });
+
+  // Release stuck tasks
+  app.post('/batch/release_stuck', async (request: FastifyRequest<{
+    Querystring: { runId: string }
+  }>) => {
+    const { releaseStuckTasks } = await import('../batch/service.js');
+    
+    const count = await releaseStuckTasks(request.query.runId);
+    
+    return { ok: true, releasedCount: count };
+  });
+
+  // Estimate batch run
+  app.post('/batch/estimate', async (request: FastifyRequest<{
+    Body: {
+      symbols: string[];
+      tfs: string[];
+      startTs: number;
+      endTs: number;
+    }
+  }>) => {
+    const { estimateBatchRun } = await import('../batch/service.js');
+    
+    const estimate = estimateBatchRun(
+      request.body.symbols,
+      request.body.tfs,
+      request.body.startTs,
+      request.body.endTs
+    );
+    
+    return {
+      ok: true,
+      phase: '7',
+      ...estimate,
+    };
+  });
+
+  // Worker status
+  app.get('/batch/worker', async () => {
+    const { getWorkerStatus } = await import('../batch/service.js');
+    return { ok: true, ...getWorkerStatus() };
+  });
+
+  // Initialize storage indexes
+  import('../ml/training/storage.js').then(s => s.ensureIndexes()).catch(() => {});
+  import('../batch/storage.js').then(s => s.ensureIndexes()).catch(() => {});
+
+  console.log('[TA] Phase 3.0-7 (Simulator, Dataset, ML Training, Batch) endpoints added');
 }
 
 // Helper for factor descriptions
